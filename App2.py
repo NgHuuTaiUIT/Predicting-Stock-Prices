@@ -1,12 +1,4 @@
 
-import subprocess
-import sys
-
-def install(package):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
-install("typing numpy pandas matplotlib pandas_datareader keras tensorflow")
-
 from typing import final
 import numpy as np
 import pandas as pd
