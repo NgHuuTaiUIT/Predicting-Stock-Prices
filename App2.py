@@ -342,7 +342,7 @@ st.pyplot(lstm_fig)
 days = list()
 close_prices = list()
 user_input_2 = st.text_input('Enter Stock','AAPL')
-df2 = pdr.get_data_yahoo(user_input_2, start='2020-12-02', end='2020-12-30')
+df2 = pdr.get_data_yahoo(user_input_2, start='2021-12-02', end='2021-12-30')
 #Show data from 01-30 month 12 2020
 st.subheader('Data from 2020-12-01 - 2020-12-30')
 df2
