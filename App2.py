@@ -7,7 +7,16 @@ from pandas_datareader import data as pdr
 from keras.models import load_model
 import streamlit as st
 plt.style.use('fivethirtyeight')
-
+import yfinance as yf
+yf.pdr_override()
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import MinMaxScaler
+from keras.models import Sequential
+from keras.layers import Dense, LSTM
+from sklearn.svm import SVR
 
 st.title('Stock Trend Prediction')
 
@@ -16,15 +25,54 @@ start= st.text_input('Enter Date From','2013-01-01')
 end= st.text_input('Enter Date To','2020-01-28')
 stockSymbols = user_input.split(",")
 
-df = pdr.get_data_yahoo(stockSymbols, start=start, end=end)
 #Describing Data
+#Analyst
+stock_list = list()
+for stock in stockSymbols:
+    globals()[stock] = yf.download(stock, start, end)
 
+stock_name = stockSymbols
+
+for stock in stockSymbols:
+    stock_list.append(globals()[stock])
+    st.subheader('Data ' + stock)
+    globals()[stock]
+    st.subheader('Describe data ' + stock)
+    st.write(globals()[stock].describe())
+    fig_stock=plt.figure(figsize=(12.2,4.5))
+    plt.plot(globals()[stock]["Adj Close"],label=stock)
+    plt.xlabel('Date',fontsize=18)
+    plt.ylabel('Close Price USD($)',fontsize=18)
+    st.pyplot(fig_stock)
+
+
+#2. What was the moving average of the various stocks?
+#moving average of the various stocks
+ma_day = [10, 20, 50]
+st.subheader("Moving average of the various stocks")
+idx_name = 0
+for stock in stock_list:
+  ma_fig = plt.figure(figsize = (12,6))
+  plt.plot(stock.Close)
+  plt.title(stockSymbols[idx_name])
+  idx_name = idx_name + 1
+  for ma in ma_day:
+    column_name = f"MA for {ma} days"
+    ma_predict = stock.Close.rolling(ma).mean()
+    plt.plot(ma_predict)
+  plt.legend(['Close','MA for 10 days', 'MA for 20 days', 'MA for 50 days'])
+  st.pyplot(ma_fig)
+  
+
+
+
+df = pdr.get_data_yahoo(stockSymbols, start=start, end=end)
 st.subheader('Data from '+start+' - '+end)
-st.write(df.describe())
+st.write(df)
 
-df = df["Close"]
+df = df["Adj Close"]
 st.subheader('Close Price from '+start+' - '+ end)
-st.write(df.describe())
+st.write(df)
 
 #Createafunction to visualize the portfolio
 st.subheader('Portfolio Close Price History')
@@ -50,18 +98,27 @@ daily_simple_returns
 st.subheader('The stock correlation')
 corr=daily_simple_returns.corr()
 corr
+fig_heatmap_corr=plt.figure(figsize=(12.2,4.5))
+sns.heatmap(corr, annot=True, cmap='coolwarm')
+st.pyplot(fig_heatmap_corr)
+
 #Show The covariance matrix for simple returns
 st.subheader('The covariance matrix for simple returns')
 cov=daily_simple_returns.cov()
 cov
+fig_heatmap_cov=plt.figure(figsize=(12.2,4.5))
+sns.heatmap(cov, annot=True, cmap='coolwarm')
+st.pyplot(fig_heatmap_cov)
 #Show the variance
 st.subheader('The variance')
 var=daily_simple_returns.var()
 var
+
 #Print the standard deviation for daily simple returns
 st.subheader('The standard deviation for daily simple returns')
 std = daily_simple_returns.std()
 std
+
 #Visualize the stocks daily simple returns/Volatility
 st.subheader('The stocks daily simple returns/Volatility')
 fig_volatility = plt.figure(figsize=(12,4.5))
@@ -75,10 +132,32 @@ plt.xlabel('Date')
 st.pyplot(fig_volatility)
 
 #Show the mean of the daily simple return
-dailyMeanSimpleReturns=daily_simple_returns.mean()
-#Print
-st.subheader("The daily mean simple return:")
-dailyMeanSimpleReturns
+# dailyMeanSimpleReturns=daily_simple_returns.mean()
+# #Print
+# st.subheader("The daily mean simple return:")
+# dailyMeanSimpleReturns
+
+#5. How much value do we put at risk by investing in a particular stock?
+#There are many ways we can quantify risk, one of the most basic ways using the information we've gathered on daily percentage returns is by comparing the expected return with the standard deviation of the daily returns.
+# Let's start by defining a new DataFrame as a cleaned version of the original tech_rets DataFrame
+st.subheader("Risk and daily mean simple return")
+rets = daily_simple_returns.dropna()
+
+area = np.pi * 20
+
+expected_risk_return_fig = plt.figure(figsize=(10, 7))
+plt.scatter(rets.mean(), rets.std(), s=area)
+plt.xlabel('Expected return')
+plt.ylabel('Risk')
+
+for label, x, y in zip(rets.columns, rets.mean(), rets.std()):
+    plt.annotate(label, xy=(x, y), xytext=(50, 50), textcoords='offset points', ha='right', va='bottom', 
+                 arrowprops=dict(arrowstyle='-', color='blue', connectionstyle='arc3,rad=-0.3'))
+st.pyplot(expected_risk_return_fig)
+#End Analyst
+##############################################
+
+#Predict ################################################################
 
 #Decision Tree
 stock_sl = st.text_input('Enter Stock Ticker','AAPL')
@@ -105,11 +184,8 @@ stock_selected['Prediction'] = stock_selected.shift(-future_days)
 x = np.array(stock_selected.drop(['Prediction'], 1))[:-future_days]
 y = np.array(stock_selected['Prediction'])[:-future_days]
 
-from sklearn.model_selection import train_test_split
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.3)
 
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.linear_model import LinearRegression
 
 # Implementing Linear and Decision Tree Regression Algorithms.
 tree = DecisionTreeRegressor().fit(x_train, y_train)
@@ -158,17 +234,7 @@ st.pyplot(linear_fig)
 st.subheader("Prediction using LSTM")
 stock_selected2 =  pdr.get_data_yahoo('AAPL', start=start, end=end)
 
-#moving average of the various stocks
-ma_day = [10, 30, 100]
-st.subheader("Moving average of the various stocks")
-ma_fig = plt.figure(figsize = (12,6))
-for ma in ma_day:
-  column_name = f"MA for {ma} days"
-  ma_predict = stock_selected2.Close.rolling(ma).mean()
-  plt.plot(ma_predict)
-plt.plot(stock_selected2.Close)
-plt.legend(['MA for 10 days', 'MA for 30 days', 'MA for 100 days','Close'])
-st.pyplot(ma_fig)
+
 
  #Predicting the closing price stock price of APPLE inc:
  # Create a new dataframe with only the 'Close column 
@@ -181,7 +247,6 @@ training_data_len = int(np.ceil( len(dataset) * .8 ))
 training_data_len
 
 # Scale the data
-from sklearn.preprocessing import MinMaxScaler
 
 scaler = MinMaxScaler(feature_range=(0,1))
 scaled_data = scaler.fit_transform(dataset)
@@ -210,8 +275,7 @@ x_train, y_train = np.array(x_train), np.array(y_train)
 x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
 x_train.shape
 
-from keras.models import Sequential
-from keras.layers import Dense, LSTM
+
 
 # Build the LSTM model
 model = Sequential()
@@ -264,94 +328,22 @@ plt.plot(valid[['Close', 'Predictions']])
 plt.legend(['Train', 'Val', 'Predictions'], loc='lower right')
 st.pyplot(lstm_fig)
 
-#Visualization
-# st.subheader("Closing Price vs Time chart")
-# fig = plt.figure(figsize = (12,6))
-# plt. plot (df.Close)
-# st.pyplot(fig)
-
-# st.subheader('Closing Price vs Time Chart with 100MA')
-# ma100 = df.Close.rolling(100).mean()
-# fig = plt.figure(figsize=(12,6))
-# plt.plot(df.Close)
-# plt.plot(ma100, 'r')
-# st.pyplot(fig)
-
-# st.subheader('Closing Price vs Time Chart with 100MA & 200MA')
-# ma100 = df.Close.rolling(100).mean()
-# ma200 = df.Close.rolling(200).mean()
-# fig = plt.figure(figsize = (12,6))
-# plt.plot(ma100,'r')
-# plt.plot(ma200,'g')
-# plt.plot(df.Close)
-# st.pyplot(fig)
-
-# # Splitting Data into Training and Testing
-
-# data_traning = pd.DataFrame(df['Close'][0:int(len(df)*0.70)])
-# data_testing = pd.DataFrame(df[ 'Close' ][int(len(df)*0.70): int(len(df))]) 
-# from sklearn.preprocessing import MinMaxScaler
-# scaler = MinMaxScaler(feature_range=(0,1))
-
-# data_training_arr = scaler.fit_transform(data_traning)
-
-# x_train = []
-# y_train = []
-
-# for i in range(100, data_training_arr.shape[0]):
-#     x_train.append(data_training_arr[i-100: i])
-#     y_train.append(data_training_arr[i,0])
-
-# x_train, y_train = np.array(x_train), np.array(y_train)
-
-# #Load my model
-# model = load_model('./keras_model.h5')
-
-# #Testing Part
-
-# past_100_days = data_traning.tail(100)
-# final_df = past_100_days.append(data_testing, ignore_index=True)
-# input_data = scaler.fit_transform(final_df)
-
-# x_test = []
-# y_test = []
-
-# for i in range(100, input_data.shape[0]):
-#   x_test.append(input_data[i-100: i])
-#   y_test.append(input_data[i, 0])
-
-# x_test, y_test = np.array(x_test), np.array(y_test)
-# y_predicted = model.predict(x_test)
-# scaler = scaler.scale_
-
-# scale_factor = 1/scaler[0]
-# y_predicted = y_predicted * scale_factor
-# y_test = y_test * scale_factor
-
-# #Final Graph
-# st.subheader("Predictions vs Original")
-# fig2 = plt.figure(figsize=(12,6))
-# plt.plot(y_test, label = 'Original Price')
-# plt.plot(y_predicted, 'r', label = 'Predicted Price')
-# plt.xlabel('Time')
-# plt.ylabel('Price')
-# plt.legend()
-# st.pyplot(fig2)
+st.subheader("Predict Value using LSTM Model")
+st.write(valid)
 
 #Get only the dates and the adjusted close prices
 days = list()
 close_prices = list()
 user_input_2 = st.text_input('Enter Stock','AAPL')
-df2 = pdr.get_data_yahoo(user_input_2, start='2021-12-02', end='2021-12-30')
+df2 = pdr.get_data_yahoo(user_input_2, start='2021-12-02', end='2021-12-31')
 #Show data from 01-30 month 12 2020
 st.subheader('Data from 2020-12-01 - 2020-12-30')
 df2
 
 #Show and store the last row of data
 actual_price = df2.tail(1)
-
+df2 = df2[:-1]
 #Get all of the data except the last row
-df2= df2.head(len(df2)-1)
 #Show the data set
 df2.head()
 df2.tail()
@@ -359,6 +351,8 @@ df2 = df2.reset_index()
 #Get only the dates and the  close prices
 df_days = df2.loc[:, 'Date']
 df_close = df2.loc[:, 'Close']
+df2
+
 
 #Create the independent data set (dates)
 for day in df_days:
@@ -368,7 +362,6 @@ for close_price in df_close:
   close_prices.append(float(close_price))
   
 #Create 3 models
-from sklearn.svm import SVR
 lin_svr = SVR(kernel='linear', C= 1000.0)
 lin_svr.fit(days, close_prices)
 
@@ -395,6 +388,7 @@ st.subheader('Predicted price for 30')
 
 day = [[30]]
 html_str = f"""
+<h4>The actual price:{float(actual_price.loc[:, 'Close'])}</h4>
 <h4>The RBF SVR predicted price:{rbf_svr.predict(day)}</h4>
 <h4>The Linear SVR predicted price:{lin_svr.predict(day)}</h4>
 <h4>The Polynomial SVR predicted price:{poly_svr.predict(day)}</h4>
