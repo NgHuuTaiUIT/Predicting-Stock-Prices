@@ -20,9 +20,9 @@ from sklearn.svm import SVR
 
 st.title('Stock Trend Prediction')
 
-user_input = st.text_input('Enter Stock Ticker','AAPL,GOOG,AMZN,NFLX,FB')
-start= st.text_input('Enter Date From','2013-01-01')
-end= st.text_input('Enter Date To','2020-01-28')
+user_input = st.text_input('Enter Stock Ticker','AAPL,GOOG,AMZN,NFLX')
+start= st.text_input('Enter Date From','2018-01-01')
+end= st.text_input('Enter Date To','2020-12-30')
 stockSymbols = user_input.split(",")
 
 #Describing Data
@@ -37,8 +37,8 @@ for stock in stockSymbols:
     stock_list.append(globals()[stock])
     st.subheader('Data ' + stock)
     globals()[stock]
-    st.subheader('Describe data ' + stock)
-    st.write(globals()[stock].describe())
+    # st.subheader('Describe data ' + stock)
+    # st.write(globals()[stock].describe())
     fig_stock=plt.figure(figsize=(12.2,4.5))
     plt.plot(globals()[stock]["Adj Close"],label=stock)
     plt.xlabel('Date',fontsize=18)
@@ -46,22 +46,7 @@ for stock in stockSymbols:
     st.pyplot(fig_stock)
 
 
-#2. What was the moving average of the various stocks?
-#moving average of the various stocks
-ma_day = [10, 20, 50]
-st.subheader("Moving average of the various stocks")
-idx_name = 0
-for stock in stock_list:
-  ma_fig = plt.figure(figsize = (12,6))
-  plt.plot(stock.Close)
-  plt.title(stockSymbols[idx_name])
-  idx_name = idx_name + 1
-  for ma in ma_day:
-    column_name = f"MA for {ma} days"
-    ma_predict = stock.Close.rolling(ma).mean()
-    plt.plot(ma_predict)
-  plt.legend(['Close','MA for 10 days', 'MA for 20 days', 'MA for 50 days'])
-  st.pyplot(ma_fig)
+ 
   
 
 
@@ -234,23 +219,21 @@ st.pyplot(linear_fig)
 st.subheader("Prediction using LSTM")
 stock_selected2 =  pdr.get_data_yahoo('AAPL', start=start, end=end)
 
-
-
  #Predicting the closing price stock price of APPLE inc:
  # Create a new dataframe with only the 'Close column 
 data = stock_selected2.filter(['Close'])
 # Convert the dataframe to a numpy array
 dataset = data.values
-# Get the number of rows to train the model on
-training_data_len = int(np.ceil( len(dataset) * .8 ))
 
+# Get the number of rows to train the model on
+st.subheader("Get the number of rows to train the model on 80%")
+training_data_len = int(np.ceil(len(dataset) * .8 ))
 training_data_len
 
 # Scale the data
-
+st.subheader("Scale the data")
 scaler = MinMaxScaler(feature_range=(0,1))
 scaled_data = scaler.fit_transform(dataset)
-
 scaled_data
 
 # Create the training data set 
@@ -291,7 +274,6 @@ model.compile(optimizer='adam', loss='mean_squared_error')
 model.fit(x_train, y_train, batch_size=1, epochs=1)
 
 # Create the testing data set
-# Create a new array containing scaled values from index 1543 to 2002 
 test_data = scaled_data[training_data_len - 60: , :]
 # Create the data sets x_test and y_test
 x_test = []
@@ -310,11 +292,12 @@ predictions = model.predict(x_test)
 predictions = scaler.inverse_transform(predictions)
 
 # Get the root mean squared error (RMSE)
+st.subheader("  Get the root mean squared error")
 rmse = np.sqrt(np.mean(((predictions - y_test) ** 2)))
 rmse
 
 # Plot the data LSTM Model
-st.subheader("LSTM Model")
+st.subheader("  LSTM Model")
 train = data[:training_data_len]
 valid = data[training_data_len:]
 valid['Predictions'] = predictions
@@ -328,35 +311,38 @@ plt.plot(valid[['Close', 'Predictions']])
 plt.legend(['Train', 'Val', 'Predictions'], loc='lower right')
 st.pyplot(lstm_fig)
 
-st.subheader("Predict Value using LSTM Model")
+st.subheader("  Predict Value using LSTM Model")
 st.write(valid)
 
 #Get only the dates and the adjusted close prices
 days = list()
 close_prices = list()
 user_input_2 = st.text_input('Enter Stock','AAPL')
-df2 = pdr.get_data_yahoo(user_input_2, start='2021-12-02', end='2021-12-31')
+df2 = pdr.get_data_yahoo(user_input_2, start=start, end=end)
 #Show data from 01-30 month 12 2020
 st.subheader('Data from 2020-12-01 - 2020-12-30')
 df2
 
-#Show and store the last row of data
-actual_price = df2.tail(1)
-df2 = df2[:-1]
+
 #Get all of the data except the last row
 #Show the data set
 df2.head()
-df2.tail()
+df2 = df2.tail(100)
 df2 = df2.reset_index()
+data_train = df2.head(90)
+#Show and store the last row of data
+actual_price = df2.tail(10)
 #Get only the dates and the  close prices
-df_days = df2.loc[:, 'Date']
-df_close = df2.loc[:, 'Close']
+df_days = data_train.loc[:, 'Date']
+df_close = data_train.loc[:, 'Close']
 df2
 
 
 #Create the independent data set (dates)
-for day in df_days:
-  days.append([int(day.strftime ("%d"))])
+# for day in df_days:
+#   days.append([int(day.strftime ("%d"))])
+for i in range(len(df_days)):
+  days.append([i+1])
 #Create the dependent data set ( close prices)
 for close_price in df_close:
   close_prices.append(float(close_price))
@@ -384,14 +370,36 @@ plt.legend()
 st.pyplot(fig3)
 
 #Show the predicted price for the given day
-st.subheader('Predicted price for 30')
+number_days_input = st.text_input('Enter the number of next predicted days','10')
 
-day = [[30]]
-html_str = f"""
-<h4>The actual price:{float(actual_price.loc[:, 'Close'])}</h4>
-<h4>The RBF SVR predicted price:{rbf_svr.predict(day)}</h4>
-<h4>The Linear SVR predicted price:{lin_svr.predict(day)}</h4>
-<h4>The Polynomial SVR predicted price:{poly_svr.predict(day)}</h4>
-"""
+st.subheader('Predicted price for the next ' +number_days_input+ ' days')
 
-st.markdown(html_str, unsafe_allow_html=True)
+arr_days_predict = list()
+
+for i in range(int(number_days_input)):
+  arr_days_predict.append([i+1+len(days)])
+
+st.subheader('The actual price:')
+for vl in actual_price['Close']:
+  st.write(vl)
+
+st.subheader('The RBF SVR predicted price:')
+for vl in rbf_svr.predict(arr_days_predict):
+  st.write(vl)
+
+st.subheader('The Linear SVR predicted price:')
+for vl in lin_svr.predict(arr_days_predict):
+  st.write(vl)
+
+st.subheader('The Polynomial SVR predicted price:')
+for vl in poly_svr.predict(arr_days_predict):
+  st.write(vl)
+
+# html_str = f"""
+# <h4>The actual price:{actual_price['Close']}</h4>
+# <h4>The RBF SVR predicted price:{rbf_svr.predict(arr_days_predict)}</h4>
+# <h4>The Linear SVR predicted price:{lin_svr.predict(arr_days_predict)}</h4>
+# <h4>The Polynomial SVR predicted price:{poly_svr.predict(arr_days_predict)}</h4>
+# """
+
+# st.markdown(html_str, unsafe_allow_html=True)
