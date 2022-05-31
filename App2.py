@@ -30,7 +30,7 @@ stockSymbols = user_input.split(",")
 #Analyst
 stock_list = list()
 for stock in stockSymbols:
-    globals()[stock] = yf.download(stock, start, end)
+    globals()[stock] = pdr.get_data_yahoo(stock, start, end)
 
 stock_name = stockSymbols
 
@@ -58,7 +58,7 @@ st.write(df)
 
 df = df["Adj Close"]
 st.subheader('Close Price from '+start+' - '+ end)
-st.write(df)
+st.write(df.reset_index())
 
 #Createafunction to visualize the portfolio
 st.subheader('Portfolio Close Price History')
@@ -164,59 +164,115 @@ st.pyplot(stock_selected_fig)
 stock_selected = stock_selected["Close"]
 stock_selected = pd.DataFrame(stock_selected)
 
-# Prediction 100 days into the future.
-future_days = 100
-stock_selected['Prediction'] = stock_selected.shift(-future_days)
-x = np.array(stock_selected.drop(['Prediction'], 1))[:-future_days]
-y = np.array(stock_selected['Prediction'])[:-future_days]
+# Prediction 60 days into the future.
+future_days = 60
+stock_selected['Predictions'] = stock_selected.shift(-future_days)
+x = np.array(stock_selected.drop(['Predictions'], 1))[:-future_days]
+y = np.array(stock_selected['Predictions'])[:-future_days]
 
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.3)
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2)
 
+#Use RandomForestRegressor for the model
+from sklearn.ensemble import RandomForestRegressor
+forest = RandomForestRegressor(n_estimators=2,random_state=500)
+forest.fit(x_train,y_train)
+print(forest.score(x_test,y_test))
+
+#Get the validate data for the model
+#Create a variable to store all of the rows in the data set except the last n rows
+temp_stock_select = stock_selected[:-future_days]
+#Create a variable to store the independent price value
+# x_future = temp_stock_select.tail(future_days)['Close']
+x_future = list()
+for vl in  temp_stock_select.tail(future_days)['Close']:
+    x_future.append([vl])
+
+forest_prediction = forest.predict(x_future)
+#Print the price for the next n days
+
+#Show plot Forest
+st.subheader("Predict using Random Forest")
+predictions = forest_prediction 
+valid_forest = stock_selected[x.shape[0]:]
+valid_forest['Predictions'] = predictions
+forest_fig = plt.figure(figsize=(16,8))
+plt.title("Model")
+plt.xlabel('Days')
+plt.ylabel('Close Price USD ($)')
+# plt.plot(x_train['Close'])
+plt.plot(valid_forest[['Close', 'Predictions']])
+plt.legend(["Original", "Valid", 'Predicted'])
+st.pyplot(forest_fig)
+
+#Print values predicts & actual price 
+st.write(valid_forest)
+
+# Get the root mean squared error (RMSE)
+st.subheader("  Get the root mean squared error Random Forest Model")
+rmse = np.sqrt(np.mean(((valid_forest["Close"] - valid_forest["Predictions"]) ** 2)))
+rmse
 
 # Implementing Linear and Decision Tree Regression Algorithms.
 tree = DecisionTreeRegressor().fit(x_train, y_train)
 lr = LinearRegression().fit(x_train, y_train)
 
-x_future = stock_selected.drop(['Prediction'], 1)[:-future_days]
+x_future = stock_selected.drop(['Predictions'], 1)[:-future_days]
 x_future = x_future.tail(future_days)
 x_future = np.array(x_future)
 
-#Predict Tree
+#Predict Tree #################################################################
 tree_prediction = tree.predict(x_future)
-tree_prediction
+# tree_prediction
 
 predictions = tree_prediction 
 valid = stock_selected[x.shape[0]:]
 valid['Predictions'] = predictions
-st.subheader("Predict Tree")
+st.subheader("Predict Using Decision Tree")
 tree_fig = plt.figure(figsize=(16,8))
 plt.title("Model")
 plt.xlabel('Days')
 plt.ylabel('Close Price USD ($)')
-plt.plot(stock_selected['Close'])
+# plt.plot(stock_selected['Close'])
 plt.plot(valid[['Close', 'Predictions']])
 plt.legend(["Original", "Valid", 'Predicted'])
 st.pyplot(tree_fig)
 
+#Print values predicts & actual price 
+st.write(valid)
+
+# Get the root mean squared error (RMSE)
+st.subheader("  Get the root mean squared error Decision Tree Model")
+rmse = np.sqrt(np.mean(((valid["Close"] - valid["Predictions"]) ** 2)))
+rmse
+
+
 #Predict Linear
 lr_prediction = lr.predict(x_future)
-lr_prediction
+# lr_prediction
 
 predictions = lr_prediction 
 valid = stock_selected[x.shape[0]:]
 valid['Predictions'] = predictions
-st.subheader("Predict Linear")
+st.subheader("Predict Using Linear Regression")
 linear_fig = plt.figure(figsize=(16,8))
 plt.title("Model")
 plt.xlabel('Days')
 plt.ylabel('Close Price USD ($)')
-plt.plot(stock_selected['Close'])
+# plt.plot(stock_selected['Close'])
 plt.plot(valid[['Close', 'Predictions']])
 plt.legend(["Original", "Valid", 'Predicted'])
 st.pyplot(linear_fig)
 
+#Print values predicts & actual price 
+st.write(valid)
 
-#Prediction using LSTM
+# Get the root mean squared error (RMSE)
+st.subheader("  Get the root mean squared error Linear Regression Model")
+rmse = np.sqrt(np.mean(((valid["Close"] - valid["Predictions"]) ** 2)))
+rmse
+
+
+#Prediction using LSTM #########################################################
 st.subheader("Prediction using LSTM")
 stock_selected2 =  pdr.get_data_yahoo('AAPL', start=start, end=end)
 
@@ -227,15 +283,15 @@ data = stock_selected2.filter(['Close'])
 dataset = data.values
 
 # Get the number of rows to train the model on
-st.subheader("Get the number of rows to train the model on 80%")
+# st.subheader("Get the number of rows to train the model on 80%")
 training_data_len = int(np.ceil(len(dataset) * .8 ))
-training_data_len
+# training_data_len
 
 # Scale the data
-st.subheader("Scale the data")
+# st.subheader("Scale the data")
 scaler = MinMaxScaler(feature_range=(0,1))
 scaled_data = scaler.fit_transform(dataset)
-scaled_data
+# scaled_data
 
 # Create the training data set 
 # Create the scaled training data set
@@ -257,7 +313,7 @@ x_train, y_train = np.array(x_train), np.array(y_train)
 
 # Reshape the data
 x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
-x_train.shape
+# x_train.shape
 
 
 
@@ -292,13 +348,10 @@ x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1 ))
 predictions = model.predict(x_test)
 predictions = scaler.inverse_transform(predictions)
 
-# Get the root mean squared error (RMSE)
-st.subheader("  Get the root mean squared error")
-rmse = np.sqrt(np.mean(((predictions - y_test) ** 2)))
-rmse
+
 
 # Plot the data LSTM Model
-st.subheader("  LSTM Model")
+# st.subheader("  LSTM Model")
 train = data[:training_data_len]
 valid = data[training_data_len:]
 valid['Predictions'] = predictions
@@ -313,7 +366,14 @@ plt.legend(['Train', 'Val', 'Predictions'], loc='lower right')
 st.pyplot(lstm_fig)
 
 st.subheader("  Predict Value using LSTM Model")
+
+#Print values predicts & actual price 
 st.write(valid)
+
+# Get the root mean squared error (RMSE)
+st.subheader("  Get the root mean squared error LSTM")
+rmse = np.sqrt(np.mean(((predictions - y_test) ** 2)))
+rmse
 
 #Get only the dates and the adjusted close prices
 days = list()
@@ -370,6 +430,8 @@ plt.ylabel('Close Price ($)')
 plt.legend()
 st.pyplot(fig3)
 
+
+
 #Show the predicted price for the given day
 number_days_input = st.text_input('Enter the number of next predicted days','10')
 
@@ -396,6 +458,20 @@ st.subheader('The Polynomial SVR predicted price:')
 for vl in poly_svr.predict(arr_days_predict):
   st.write(vl)
 
+# Get the root mean squared error (RMSE)
+st.subheader("  Get the root mean squared error RBF Model")
+rmse = np.sqrt(np.mean(((actual_price['Close'] - rbf_svr.predict(arr_days_predict)) ** 2)))
+rmse
+
+# Get the root mean squared error (RMSE)
+st.subheader("  Get the root mean squared error Polynomial Model")
+rmse = np.sqrt(np.mean(((actual_price["Close"] - poly_svr.predict(arr_days_predict)) ** 2)))
+rmse
+
+# Get the root mean squared error (RMSE)
+st.subheader("  Get the root mean squared error Linear Regression Model")
+rmse = np.sqrt(np.mean(((actual_price["Close"] - lin_svr.predict(arr_days_predict)) ** 2)))
+rmse
 # html_str = f"""
 # <h4>The actual price:{actual_price['Close']}</h4>
 # <h4>The RBF SVR predicted price:{rbf_svr.predict(arr_days_predict)}</h4>
